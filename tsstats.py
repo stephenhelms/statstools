@@ -31,6 +31,34 @@ def acf(x, lags=500, exclude=None):
     return C
 
 
+def ccf(x, y, lags):
+    x = x - x.mean()  # remove mean
+    y = y - y.mean()
+    if type(lags) is int:
+        lags = range(lags)
+    C = ma.zeros((len(lags), 1))
+    for i, l in enumerate(lags):
+        if l == 0:
+            C[i] = 1
+        else:
+            C[i] = ma.corrcoef(x[:-l], y[l:])[0, 1]
+    return C
+
+
+def acv(k, List):
+    '''
+    Autocovariance
+    k is the lag order
+    '''
+    y = List.copy()
+    y = y - y.mean()
+
+    if k == 0:
+        return (y*y).mean()
+    else:
+        return (y[:-k]*y[k:]).mean()
+
+
 def dotacf(x, lags=500, exclude=None):
     if exclude is None:
         exclude = np.zeros(x.shape)
@@ -50,6 +78,29 @@ def dotacf(x, lags=500, exclude=None):
             x1[reject, :] = ma.masked
             C[i] = (x0*x1).sum(axis=1).mean()
     return C
+
+
+def pacfe(p,j,List):
+    '''
+    Partial autocorrelation function estimates
+    p is the order of the AR(p) process
+    j is the coefficient in an AR(p) process
+    '''
+    if p==2 and j==1:
+        return (acf(j,List)*(1-acf(p,List)))/(1-(acf(j,List))**2)
+    elif p==2 and j==2:
+        return (acf(2,List)-(acf(1,List))**2)/(1-(acf(1,List))**2)
+    elif p==j and p!=2 and j!=2:
+        c=0
+        for a in range(1,p):
+            c+=pacfe(p-1,a,List)*acf(p-a,List)
+        d=0
+        for b in range(1,p):
+            d+=pacfe(p-1,b,List)*acf(b,List)
+        return (acf(p,List)-c)/(1-d)
+    else: 
+        return pacfe(p-1,j,List)-pacfe(p,p,List)*pacfe(p-1,p-j,List)
+
 
 
 def drift(x, lags=500, exclude=None):
