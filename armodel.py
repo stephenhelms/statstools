@@ -5,23 +5,29 @@ import itertools
 import collections
 from scipy import stats
 
-# In[ ]:
 
-def vectorToAutoregressiveForm(y,p,n=None):
+def tsToAutoregressiveForm(Y, p):
     '''
-    y is a matrix of observations, where columns are the variables and rows are time points
+    Y is a matrix of observations, where columns are the variables and rows
+    are time points
     p is the max order
-    n is the variable for process
-    Returns: yf, the observations; yp, the lagged predictors
+    Returns: Yf, the observations; Yp, the lagged predictors
     '''
-    if len(y.shape)>1:
-        y = y[:,n]
-    yf=y[p:, np.newaxis]  # observed values in the fit
-    yp=np.array([y[p-pj:-pj] for pj in range(1,p+1)]).T
-    return yf, yp
+    # if a 1D time series is provided, make it 2D to avoid axis problems below
+    if len(Y.shape) == 1:
+        Y = Y[:, np.newaxis]
+    nObs, nVar = Y.shape
+    
+    Yf = Y[p:, :]  # observed values in the fit
+    Yp = ma.dstack(tuple(Y[p-pj:-pj, :] for pj in range(1, p+1)))
 
+    # because the lagged data loses the first p values, replace them with masked
+    lostObsf = ma.array(ma.zeros((p, nVar)), mask=True)  # placeholder for first p obs
+    Yf = ma.vstack((lostObsf, Yf))
+    lostObsp = ma.array(ma.zeros((p, nVar, p)), mask=True)  # placeholder for first p obs
+    Yp = ma.vstack((lostObsp, Yp))
+    return Yf, Yp
 
-# In[7]:
 
 def coefmatrix(List,p):
     '''
