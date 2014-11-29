@@ -1,11 +1,49 @@
 import numpy as np
 import numpy.ma as ma
 from numpy import linalg as LA
-import itertools
-import collections
 from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
+import tsstats  # stephen's library
+
+'''
+Example usage:
+Starting with an nObservation x nVar time series Y.
+
+Test orders:
+Shows the R2 value for each channel for various AR orders
+plotARfitR2(Y, (1,2,3))
+
+Fit model and examine residuals:
+p = 1  # AR order
+W = fitARmodel(Y, p)  # coefficient matrix
+eps = residualARmodel(Y, W, p)  # residuals
+plotARdiagostics(Y, eps, 115)  # look at model output
+
+Simulate model with real residuals to test output:
+Ysim = armodel.simulateARmodel(W, eps)
+for i in xrange(Y.shape[1]):
+    plt.subplot(Y.shape[1], 1, i+1)
+    plt.plot(Y[:,i], 'k-')
+    plt.plot(Ysim[:,i], 'r-')
+    plt.xlabel('Time (frames)')
+    plt.ylabel('Channel '+str(i+1))
+plt.show()
+
+Analyze model dynamics:
+Wf = trans_frobenius(W)  # frobenius transformed coefficients
+tau, T = model_dynamics(Wf, 11.5)  # model dynamics in s (for 11.5 Hz sampling)
+print tau
+print T
+'''
+
+
+def getLaggedSamples(Y, i, p):
+    '''
+    Returns a vector of p time lags at observation i for the
+    nObservation x nVar time series Y.
+    '''
+    return ma.hstack(tuple(Y[i-pj, :] for pj in range(1, p+1)))
 
 
 def tsToAutoregressiveForm(Y, p):
@@ -76,16 +114,26 @@ def calculateR2(Y, eps):
     return 1. - eps.var(axis=0)/(Y-Y.mean(axis=0)).var(axis=0)
 
 
-def plotARfit(Y, p):
-    W = fitARmodel(Y, p)
-    Yhat = predictARmodel(Y, W, p)
+def plotARdiagostics(Y, eps, maxLag=115):
     for i in xrange(Y.shape[1]):
-        plt.subplot(Y.shape[1], 2, i*2+1)
-        plt.plot(Y[:, i], 'k-')
-        plt.plot(Yhat[:, i], 'r-')
-
-        plt.subplot(Y.shape[1], 2, i*2+2)
-        plt.plot(Y[:, i] - Yhat[:, i], 'k-')
+        plt.subplot(Y.shape[1], 3, i*3+1)
+        C = tsstats.acf(Y[:, i], maxLag)
+        plt.plot(C, 'k-')
+        Cr = tsstats.acf(eps[:, i], maxLag)
+        plt.plot(Cr, 'r-')
+        plt.xlabel('Lag (frame)')
+        plt.ylabel('ACF')
+        plt.subplot(Y.shape[1], 3, i*3+2)
+        plt.plot(eps[:, i], 'r-')
+        plt.xlabel('Time (frames)')
+        plt.ylabel('Channel '+str(i+1)+' Residual')
+        plt.subplot(Y.shape[1], 3, i*3+3)
+        sns.kdeplot(Y[:, i], color='k', label='Input')
+        sns.kdeplot(eps[:, i], color='r', label='Residual')
+        plt.xlabel('Channel '+str(i+1))
+        plt.ylabel('Probability')
+        plt.legend()
+    plt.tight_layout()
     plt.show()
 
 
@@ -152,19 +200,23 @@ def trans_frobenius(W):
     return Atr
 
 
-def f(List,i,p):
-    x=[]
-    for j in range(1,p+1):
-        x.append(List[p-j:-j,:])
-    xmatrix=np.hstack(x)
-    return xmatrix[i,:]
+def simulateARmodel(W, eps):
+    '''
+    Simulates the AR model of order p specified by nVar*p x nVar
+    coefficient matrix W using the nObservation x nVar noise matrix eps.
+    Respects masked values and masks the first p observations.
+    Returns the simulated time series Ysim.
 
-
-# In[ ]:
-
-def simul(List,p,Coef):
-    y1=List.copy()
-    for i in range(len(y1)-p-1):
-        y1[p+i,:]=np.dot(f(y1,i,p),Coef)+y1[p+i,:]
-    return y1
-
+    The model can be checked by running this function with the real
+    residual from residualARmodel, the results should match the original
+    data.
+    '''
+    nVar = W.shape[1]
+    p = W.shape[0]/W.shape[1]
+    nSamples = eps.shape[0]
+    Ysim = ma.zeros((nSamples, nVar))
+    Ysim[:p, :] = eps[:p, :]
+    for i in xrange(p, nSamples):
+        Ysim[i, :] = ma.dot(getLaggedSamples(Ysim, i, p), W) + eps[i, :]
+    Ysim[:p, :] = ma.masked
+    return Ysim
