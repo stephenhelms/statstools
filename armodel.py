@@ -111,7 +111,10 @@ def calculateR2(Y, eps):
     from the input data Y and the residual eps.
     Returns the R2 values for each channel.
     '''
-    return 1. - eps.var(axis=0)/(Y-Y.mean(axis=0)).var(axis=0)
+    sel = ~np.logical_or(np.any(eps.mask, axis=1),
+                         np.any(Y.mask, axis=1))
+    return 1. - ((eps[sel, :]**2).sum(axis=0) /
+                 ((Y[sel, :]-Y[sel, :].mean(axis=0))**2).sum(axis=0))
 
 
 def plotARdiagostics(Y, eps, maxLag=115):
