@@ -150,7 +150,7 @@ def nextpow2(n):
     return 2**m_i
 
 
-def phaserand(X, independent=False):
+def phaserand(X, independent=False, reduceHighFreqNoise=True):
     '''
     Generates a randomized surrogate dataset for X, preserving linear temporal
     correlations. If independent is False (default), linear correlations
@@ -178,13 +178,30 @@ def phaserand(X, independent=False):
     if len(X.shape) == 1:
         X = X[:, np.newaxis]
 
+
     # Deal with missing data
     if isinstance(X, ma.MaskedArray):
-        X = X.filled(X.mean(axis=0))  # fill missing values with the mean
+        # truncate all missing data at beginning and end
+        idxNotAllMissing = (~np.all(X.mask, axis=1)).nonzero()[0]
+        X = X[idxNotAllMissing[0]:idxNotAllMissing[-1], :]
+        X = X.filled(X.mean(axis=0))  # fill interior mask with the mean
+
+    # Reduce high-frequency noise by min difference between first and last
+    if reduceHighFreqNoise:
+        delta = X - X[0, :]
+        threshold = 1e-3*np.std(X, axis=0)
+        # find last pt in which all the channels are about the same as the beginning
+        # and also the index is even
+        goodEndPt = np.nonzero((np.all(np.abs(delta) < threshold, axis=1)) &
+                               (np.arange(0, X.shape[1]) % 2 == 0))[0][-1]
+        if goodEndPt > X.shape[0]/2:  # make sure we keep at least half the data
+            X = X[:goodEndPt, :]
 
     # Fourier transform and extract amplitude and phases
     # The frequencies are shifted so 0 is centered (fftshift)
-    N = int(nextpow2(X.shape[0]))  # size for FFT
+    N = X.shape[0] #int(nextpow2(X.shape[0]))  # size for FFT
+    if N % 2 != 0:
+        N = N-1
     h = np.floor(N/2)  # half the length of the data
     Z = np.fft.fft(X, N, axis=0)
     M = np.fft.fftshift(np.abs(Z), axes=0)  # the amplitudes
@@ -210,7 +227,6 @@ def phaserand(X, independent=False):
     # Reconstruct the signal from the original amplitude and the new phases
     z2 = M*np.exp(newphase*1.j)
 
-    # Return the time-domain signal (have to undo the fftshift and keep the
-    # orignal length)
+    # Return the time-domain signal
     return np.fft.ifft(np.fft.ifftshift(z2, axes=0),
-                       axis=0).real[:X.shape[0], :].squeeze()
+                       axis=0).real.squeeze()

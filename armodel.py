@@ -55,7 +55,9 @@ def tsToAutoregressiveForm(Y, p):
     Note: The first p rows of the output are set to masked so the output can
     be directly compared with the input matrix Y.
     '''
-    Y = ma.atleast_2d(Y)
+    if len(Y.shape)==1:
+        Y = Y[:, np.newaxis]
+
     nObs, nVar = Y.shape
 
     Yf = Y[p:, :]  # observed values in the fit
@@ -101,6 +103,8 @@ def residualARmodel(Y, W, p):
     from the input data Y using the model of order p specified by W.
     Returns the nObservations x nChannels residual.
     '''
+    if len(Y.shape)==1:
+        Y = Y[:, np.newaxis]
     Yhat = predictARmodel(Y, W, p)
     return Y - Yhat
 
