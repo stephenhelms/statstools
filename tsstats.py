@@ -35,13 +35,14 @@ def ccf(x, y, lags):
     x = x - x.mean()  # remove mean
     y = y - y.mean()
     if type(lags) is int:
-        lags = range(lags)
-    C = ma.zeros((len(lags), 1))
+        lags = np.arange(lags)
+    C = ma.zeros((len(lags),))
+    sigma2 = x.std()*y.std()
     for i, l in enumerate(lags):
         if l == 0:
-            C[i] = 1
+            C[i] = (x*y).mean()/sigma2
         else:
-            C[i] = ma.corrcoef(x[:-l], y[l:])[0, 1]
+            C[i] = (x[:-l]*y[l:]).mean()/sigma2
     return C
 
 
