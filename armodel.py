@@ -94,7 +94,10 @@ def predictARmodel(Y, W, p):
     Returns the nObservations x nChannels prediction time series.
     '''
     Yf, Yp = tsToAutoregressiveForm(Y, p)
-    return ma.dot(Yp, W)
+    sel = ma.getmaskarray(Yp).any(axis=1)
+    Yhat = ma.dot(Yp, W)
+    Yhat[sel,:] = ma.masked
+    return Yhat
 
 
 def residualARmodel(Y, W, p):
@@ -109,16 +112,20 @@ def residualARmodel(Y, W, p):
     return Y - Yhat
 
 
-def calculateR2(Y, eps):
+def calculateR2(Y, eps, forceSel=None):
     '''
     Calculates the coefficient of determination of the AR fit
     from the input data Y and the residual eps.
     Returns the R2 values for each channel.
+    An additional selection mask can be provided with the forceSel keyword
     '''
-    sel = ~np.logical_or(np.any(eps.mask, axis=1),
-                         np.any(Y.mask, axis=1))
-    return 1. - ((eps[sel, :]**2).sum(axis=0) /
-                 ((Y[sel, :]-Y[sel, :].mean(axis=0))**2).sum(axis=0))
+    sel = ~np.logical_or(ma.getmaskarray(eps).any(axis=1),
+                         ma.getmaskarray(Y).any(axis=1))
+    if forceSel is not None:
+        sel = np.logical_and(sel, forceSel)
+
+    return 1. - ((eps[sel, :]**2).sum() /
+                 ((Y[sel, :]-Y[sel,:].mean())**2).sum())
 
 
 def plotARdiagostics(Y, eps, maxLag=115):

@@ -6,10 +6,11 @@ import tsstats
 
 
 class StochasticDifferentialEquation(object):
-    def __init__(self, detFunc, stochFunc, params):
+    def __init__(self, detFunc, stochFunc, params, positive=False):
         self.detFunc = detFunc
         self.stochFunc = stochFunc
         self.params = params
+        self.positive = positive
 
     def evalDet(self, t, y):
         return self.detFunc(self.params, y, t)
@@ -28,7 +29,10 @@ class StochasticDifferentialEquation(object):
             else:
                 detPart = self.evalDet(ti, y[i-1])
                 stochPart = self.evalStoch(ti, y[i-1])
-                y[i] = y[i-1] + detPart*dt + stochPart*sqrtdt*r[i-1]
+                if self.positive:
+                    y[i] = ma.abs(y[i-1] + detPart*dt + stochPart*sqrtdt*r[i-1])
+                else:
+                    y[i] = y[i-1] + detPart*dt + stochPart*sqrtdt*r[i-1]
         return t, y
 
     def plotSimulation(self, t0, tmax, dt, y0=0.,
@@ -89,13 +93,14 @@ class TheoreticalACF(object):
 class OrnsteinUhlenbeck(StochasticDifferentialEquation,
                         Fittable,
                         TheoreticalACF):
-    def __init__(self, tau, mu, sigma):
+    def __init__(self, tau, mu, sigma, positive=False):
         StochasticDifferentialEquation.__init__(self,
             lambda p, y, t: self._ouDetFunc(p['tau'],
                                             p['mu'],
                                             y),
             lambda p, y, t: self._ouStochFunc(p['sigma']),
-            {'tau': tau, 'mu': mu, 'sigma': sigma})
+            {'tau': tau, 'mu': mu, 'sigma': sigma},
+            positive)
 
     def _ouDetFunc(self, tau, mu, y):
         return 1./tau * (mu - y)
