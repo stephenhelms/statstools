@@ -71,6 +71,22 @@ def tsToAutoregressiveForm(Y, p):
     return Yf, Yp
 
 
+def tsToAutoregressiveFormNonlinear(Y, p):
+    Y = ma.atleast_2d(Y)
+    nObs, nVar = Y.shape
+
+    Yf = Y[p:, :]  # observed values in the fit
+    Yp = ma.hstack(tuple(Y[p-pj:-pj, :] for pj in range(1, p+1)))
+    Yp = ma.hstack((Yp, Yp**2))
+
+    # because the lagged data loses the first p values, replace with masked
+    lostObsf = ma.array(ma.zeros((p, nVar)), mask=True)
+    Yf = ma.vstack((lostObsf, Yf))
+    lostObsp = ma.array(ma.zeros((p, Yp.shape[1])), mask=True)
+    Yp = ma.vstack((lostObsp, Yp))
+    return Yf, Yp
+
+
 def fitARmodel(Y, p):
     '''
     Fits an AR model of order p to the nObservation x nChannels
