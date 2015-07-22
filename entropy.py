@@ -242,8 +242,46 @@ def JSdiv_kd(X, Y, f=2):
 
 
 '''
+MUTUAL INFORMATION
+'''
+
+def MI_normal(rho):
+    '''
+    Calculates the Mutual Information between a correlated pair of normal distributions
+    '''
+    return -0.5*np.log(1.-rho**2)/np.log(2)
+
+
+def MI_kd(Y, f=2):
+    '''
+    Calculates the Mutual Information between the columns of the N-dimensional distribution
+    Y, approximated with kernel density estimation and integrated by
+    sampling f-fold from each estimated distribution.
+    '''
+    # remove missing data
+    sel = ~ma.getmaskarray(Y).any(axis=1)
+    Y = Y[sel,:]
+    
+    # generate a Gaussian kernel estimate of the probability dist
+    Ykd = ss.gaussian_kde(Y.T)
+    Yckd = [ss.gaussian_kde(Y[:,c].T) for c in xrange(Y.shape[1])]  # for each column independently
+    # estimate the relative entropy by sampling from the estimated distributions
+    n = int(round(f*Y.shape[0]))
+    S = Ykd.resample(n)
+    Iest = np.log2(Ykd(S)/np.prod(np.array([Yckd[c](S[c])+1e-10 for c in xrange(Y.shape[1])]), axis=0))
+    return Iest.mean()
+
+
+'''
 MODULE TESTS
 '''
+
+def mvnCorrelated(rho):
+    Sigma = np.array([[1, rho], [rho, 1]])
+    mu = np.array([0,0])
+    Z = np.random.multivariate_normal(mu, Sigma, 1000)
+    return Z
+
 
 def _testEntropy(sigma=0.3, m=2):
     H_theory = m*entropy_normaldist(sigma)
@@ -319,3 +357,12 @@ def _testJSdiv():
     D_kd_nonoverlap = JSdiv_kd(Z0, Z0 + np.ones(Z0.shape[1])*100)
     print('The JS-divergence of non-overlapping datasets is {0}.'.format(D_kd_nonoverlap))
 
+
+def _testMI():
+    rhos = np.linspace(0,1,10)
+    rhos[-1] = rhos[-1] - 0.01
+    Itheory = [MI_normal(rho) for rho in rhos]
+    Ikd = [entropy.MI_kd(mvnCorrelated(rho)) for rho in rhos]
+    print rhos
+    print Itheory
+    print Ikd
