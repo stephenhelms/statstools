@@ -31,18 +31,32 @@ def acf(x, lags=500, exclude=None):
     return C
 
 
-def ccf(x, y, lags):
+def ccf(x, y, lags, exclude=None):
+    if exclude is None:
+        exclude = np.zeros(x.shape)
+    exclude = np.cumsum(exclude.astype(int))
+
     x = x - x.mean()  # remove mean
     y = y - y.mean()
     if type(lags) is int:
-        lags = np.arange(lags)
+        lags = np.arange(-lags,lags)
     C = ma.zeros((len(lags),))
     sigma2 = x.std()*y.std()
     for i, l in enumerate(lags):
         if l == 0:
             C[i] = (x*y).mean()/sigma2
         else:
-            C[i] = (x[:-l]*y[l:]).mean()/sigma2
+            if l > 0:
+                x0 = x[:-l].copy()
+                y1 = y[l:].copy()
+            else:
+                x0 = y[:l].copy()
+                y1 = x[-l:].copy()
+            reject = (exclude[l:]-exclude[:-l])>0
+            x0[reject] = ma.masked
+            y1[reject] = ma.masked
+
+            C[i] = (x0*y1).mean()/sigma2
     return C
 
 
